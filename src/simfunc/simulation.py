@@ -405,13 +405,39 @@ class Simulation:
             )
 
             sns.histplot(self.plt_hist_wait_time[i], ax=axs[i, 1], bins=30)
+
             axs[i, 1].text(
-                0.7,
-                0.9,
+                0.95,
+                0.95,
                 f"total = {self.plt_hist_wait_time[i].count():,} Pax",
-                horizontalalignment="center",
-                verticalalignment="center",
+                horizontalalignment="right",
+                verticalalignment="top",
                 transform=axs[i, 1].transAxes,
+            )
+
+            y = (
+                self.plt_hist_wait_time[i]
+                .groupby(pd.cut(self.plt_hist_wait_time[i], 30))
+                .agg("count")
+                .max()
+                / 2
+            )
+
+            axs[i, 1].vlines(
+                x=self.plt_hist_wait_time[i].mean(),
+                ymin=0,
+                ymax=y,
+                color="green",
+                label="mean",
+            )
+
+            axs[i, 1].text(
+                self.plt_hist_wait_time[i].mean(),
+                y * 1.1,
+                f"mean = {self.plt_hist_wait_time[i].mean():.1f} min",
+                horizontalalignment="left",
+                verticalalignment="center",
+                color="green",
             )
 
             axs[i, 0].set(
@@ -427,6 +453,9 @@ class Simulation:
                 tick.FuncFormatter(lambda x, p: format(int(x), ",")),
             )
             axs[i, 0].legend(loc="upper left")
+            axs[i, 1].yaxis.set_major_formatter(
+                tick.FuncFormatter(lambda x, p: format(int(x), ",")),
+            )
 
             axs[i, 1].set_xlim(left=0)
 
@@ -436,6 +465,7 @@ class Simulation:
             ax2[i].spines["right"].set_color("r")
             ax2[i].tick_params(axis="y", colors="r")
             ax2[i].yaxis.label.set_color("r")
+            ax2[i].grid(visible=False)
 
         # remove ticks labels for all grows except last
         for i in range(n_graph - 1):

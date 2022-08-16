@@ -46,7 +46,12 @@ class SimParam:
             dtype="str",
         )
 
-    def schedule_from_path(self, path: Path):
+    def schedule_from_path(
+        self,
+        path: Path,
+        sheet_name: str = r"schedule",
+        header: int = 0,
+    ):
         """
         excel file should be formatted with following columns
         | A/D | T1/T2(MM/9C/7C/TW) | Intl Regions | Category(P/C/O) | Sector |
@@ -55,8 +60,8 @@ class SimParam:
         self.path = path
         self.schedule = pd.read_excel(
             self.path,
-            sheet_name=r"schedule",
-            header=0,
+            sheet_name=sheet_name,
+            header=header,
         )
         self.schedule_origin = self.schedule.copy()
 
@@ -69,7 +74,7 @@ class SimParam:
         | Flight Number | SEATS FC | PAX_SUM FC | Flight Date | Scheduled Time |
         """
         self.schedule = dataframe.copy()
-        self.schedule_origin = self.schedule
+        self.schedule_origin = self.schedule.copy()
 
         return self
 
@@ -102,7 +107,7 @@ class SimParam:
         # bad formatting of 0 pax flight I guess? for JAL 8126
         self.schedule["PAX_SUM FC"].replace("-", 0, inplace=True)
         # store for reference
-        self.schedule_clean = self.schedule
+        self.schedule_clean = self.schedule.copy()
 
         return self
 
@@ -126,7 +131,7 @@ class SimParam:
         ]
         filtered_data = filtered_data.reset_index()
         self.schedule = filtered_data
-        self.schedule_filtered = self.schedule
+        self.schedule_filtered = self.schedule.copy()
 
         return self
 
@@ -500,7 +505,7 @@ class SimParam:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         # plot param
-        width_hour = pd.Timedelta("0 days 01:00:00")
+        width_hour = pd.Timedelta(freq)
         width_bar = 0.7 * width_hour / nb_bar
 
         # calculation
@@ -531,7 +536,7 @@ class SimParam:
             ax.text(
                 0.15,
                 0.95 - index * 0.05,
-                f"total = {plot['sum'].sum():,} Pax",
+                f"total = {plot['sum'].sum()/ratio_sampling:,} Pax",
                 horizontalalignment="center",
                 verticalalignment="center",
                 transform=ax.transAxes,
