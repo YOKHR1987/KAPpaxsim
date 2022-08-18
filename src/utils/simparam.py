@@ -497,7 +497,11 @@ class SimParam:
         compare_with.insert(0, self)
 
         dct_simparam = {
-            simparam.schedule.loc[0, "Flight Date"].year: simparam
+            (
+                simparam.plot_name
+                if hasattr(simparam, "plot_name")
+                else simparam.schedule.loc[0, "Flight Date"].year
+            ): simparam
             for simparam in compare_with
         }
 
@@ -563,19 +567,34 @@ class SimParam:
 
         list_simparam.insert(0, self)
 
-        dct_simparam = {idx: simparam for idx, simparam in enumerate(list_simparam)}
+        dct_simparam = {
+            (simparam.plot_name if hasattr(simparam, "plot_name") else idx): simparam
+            for idx, simparam in enumerate(list_simparam)
+        }
 
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"] * 20
         cols = airlines
         fig, ax = day_graph()
         ax.set(ylabel="counter")
-        for year, simparam in dct_simparam.items():
+
+        # find a better way to plot with multiple simparam & airlines
+        idx1 = 0
+        for key, simparam in dct_simparam.items():
             df = simparam.df_Counters.copy()
             df.index = [
                 pd.to_datetime(minutes_to_hms(5 * x)) for x in self.df_Counters.index
             ]
             for idx, col in enumerate(cols):
-                label = f"{year}_{col}" if not (compare_with is None) else col
+                label = f"{key}_{col}" if not (compare_with is None) else col
+                ax.text(
+                    0.15,
+                    0.95 - (idx + idx1) * 0.05,
+                    f"max = {df[col].max():,} counters",
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    transform=ax.transAxes,
+                    color=colors[idx + idx1],
+                )
                 if idx == 0:
                     ax.step(df.index, df[col], label=label)
                     if compare_with is None:
@@ -591,6 +610,7 @@ class SimParam:
                             color=colors[idx],
                             alpha=0.2,
                         )
+            idx1 += 1
         if legend:
             plt.legend(
                 ncol=1 + (len(cols) // 6),
