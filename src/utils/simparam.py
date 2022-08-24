@@ -46,7 +46,12 @@ class SimParam:
             dtype="str",
         )
 
-    def schedule_from_path(self, path: Path):
+    def schedule_from_path(
+        self,
+        path: Path,
+        sheet_name: str = r"schedule",
+        header: int = 0,
+    ):
         """
         excel file should be formatted with following columns
         | A/D | T1/T2(MM/9C/7C/TW) | Intl Regions | Category(P/C/O) | Sector |
@@ -55,8 +60,8 @@ class SimParam:
         self.path = path
         self.schedule = pd.read_excel(
             self.path,
-            sheet_name=r"schedule",
-            header=0,
+            sheet_name=sheet_name,
+            header=header,
         )
         self.schedule_origin = self.schedule.copy()
 
@@ -69,7 +74,7 @@ class SimParam:
         | Flight Number | SEATS FC | PAX_SUM FC | Flight Date | Scheduled Time |
         """
         self.schedule = dataframe.copy()
-        self.schedule_origin = self.schedule
+        self.schedule_origin = self.schedule.copy()
 
         return self
 
@@ -102,7 +107,7 @@ class SimParam:
         # bad formatting of 0 pax flight I guess? for JAL 8126
         self.schedule["PAX_SUM FC"].replace("-", 0, inplace=True)
         # store for reference
-        self.schedule_clean = self.schedule
+        self.schedule_clean = self.schedule.copy()
 
         return self
 
@@ -126,7 +131,7 @@ class SimParam:
         ]
         filtered_data = filtered_data.reset_index()
         self.schedule = filtered_data
-        self.schedule_filtered = self.schedule
+        self.schedule_filtered = self.schedule.copy()
 
         return self
 
@@ -474,10 +479,22 @@ class SimParam:
 
     def plot_std(
         self,
+        by_col: bool = False,
+        col_name: str = None,
         compare_with: Union["SimParam", list] = None,
         freq: str = "1H",
         win=1,
     ):
+        """
+        plot the STD graph
+
+        When by_col = True, a col_name is needed, the function will then
+        split each SimParam.schedule following this criteria
+        As for now, each simparam must use same column name
+        If column name does not exist, the "total" will be plotted.
+
+        legend will use Simparam.plot_name as label if present
+        """
         ratio_sampling = pd.to_timedelta("1H") / pd.to_timedelta(freq)
         nb_bar = 1
         # to improve, we can write less confusing
@@ -492,7 +509,11 @@ class SimParam:
         compare_with.insert(0, self)
 
         dct_simparam = {
-            simparam.schedule.loc[0, "Flight Date"].year: simparam
+            (
+                simparam.plot_name
+                if hasattr(simparam, "plot_name")
+                else simparam.schedule.loc[0, "Flight Date"].year
+            ): simparam
             for simparam in compare_with
         }
 
@@ -500,43 +521,100 @@ class SimParam:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         # plot param
-        width_hour = pd.Timedelta("0 days 01:00:00")
-        width_bar = 0.7 * width_hour / nb_bar
+        width_hour = pd.Timedelta(freq)
+        width_bar = width_hour / nb_bar
+        interval = width_bar / 2
+        date_range = pd.date_range("2020-10-13 00:00:00", periods=24, freq="1H")
+        width = 0.9 * width_bar  # for esthetic
 
         # calculation
-        index = 0
+        index = 0  # used to offset each bar
+        i = 0  # used to offset colors and text
         for label, simparam in dct_simparam.items():
-            plot = (
-                simparam.schedule.set_index("Scheduled Time", drop=False)["PAX_SUM FC"]
-                .resample(freq)
-                .agg(["sum"])
-                .rolling(window=win, center=True)
-                .mean()
-                .dropna()
-                .apply(lambda x: x * ratio_sampling)
-            )
-
+            if by_col:
+                if col_name not in simparam.schedule.columns:
+                    simparam.schedule[col_name] = "all"
+                categories = simparam.schedule[col_name].unique()
+                dct_plot = {
+                    categories[i]: simparam.schedule.loc[
+                        simparam.schedule[col_name] == categories[i]
+                    ]
+                    .set_index("Scheduled Time", drop=False)["PAX_SUM FC"]
+                    .resample(freq)
+                    .agg(["sum"])
+                    .rolling(window=win, center=True)
+                    .mean()
+                    .dropna()
+                    .apply(lambda x: x * ratio_sampling)
+                    for i in range(len(categories))
+                }
+            else:
+                plot = (
+                    simparam.schedule.set_index("Scheduled Time", drop=False)[
+                        "PAX_SUM FC"
+                    ]
+                    .resample(freq)
+                    .agg(["sum"])
+                    .rolling(window=win, center=True)
+                    .mean()
+                    .dropna()
+                    .apply(lambda x: x * ratio_sampling)
+                )
             # plot
-            interval = width_hour / (nb_bar + 1)
-            x = plot.index + (1 + index) * interval
-            width = width_bar
-            ax.bar(
-                x=x,
-                height=plot["sum"],
-                width=width,
-                align="center",
-                color=colors[index],
-                label=label,
-            )
-            ax.text(
-                0.15,
-                0.95 - index * 0.05,
-                f"total = {plot['sum'].sum():,} Pax",
-                horizontalalignment="center",
-                verticalalignment="center",
-                transform=ax.transAxes,
-                color=colors[index],
-            )
+            x = date_range + (2 * index + 1) * interval
+            if by_col:
+                previous_plot = dct_plot[categories[0]] * 0
+                for category in categories:
+                    label_cat = (
+                        f"{category} std {label}"
+                        if not (compare_with is None)
+                        else f"{category} std"
+                    )
+
+                    plot = dct_plot[category].reindex(date_range).fillna(0).copy()
+                    ax.bar(
+                        x=x,
+                        height=plot["sum"],
+                        bottom=previous_plot["sum"],
+                        width=width,
+                        align="center",
+                        color=colors[i],
+                        label=label_cat,
+                    )
+                    ax.text(
+                        0.15,
+                        0.95 - (i) * 0.05,
+                        f"total = {int(plot['sum'].sum()/ratio_sampling):,} Pax",
+                        horizontalalignment="center",
+                        verticalalignment="center",
+                        transform=ax.transAxes,
+                        color=colors[i],
+                    )
+                    i += 1
+
+                    previous_plot = plot
+
+            else:
+                # plot
+                ax.bar(
+                    x=x,
+                    height=plot["sum"],
+                    width=width,
+                    align="center",
+                    color=colors[i],
+                    label=label,
+                )
+                ax.text(
+                    0.15,
+                    0.95 - i * 0.05,
+                    f"total = {int(plot['sum'].sum()/ratio_sampling):,} Pax",
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    transform=ax.transAxes,
+                    color=colors[i],
+                )
+                i += 1
+
             index += 1
 
         plt.legend()
@@ -558,19 +636,34 @@ class SimParam:
 
         list_simparam.insert(0, self)
 
-        dct_simparam = {idx: simparam for idx, simparam in enumerate(list_simparam)}
+        dct_simparam = {
+            (simparam.plot_name if hasattr(simparam, "plot_name") else idx): simparam
+            for idx, simparam in enumerate(list_simparam)
+        }
 
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"] * 20
         cols = airlines
         fig, ax = day_graph()
         ax.set(ylabel="counter")
-        for year, simparam in dct_simparam.items():
+
+        # find a better way to plot with multiple simparam & airlines
+        idx1 = 0
+        for key, simparam in dct_simparam.items():
             df = simparam.df_Counters.copy()
             df.index = [
                 pd.to_datetime(minutes_to_hms(5 * x)) for x in self.df_Counters.index
             ]
             for idx, col in enumerate(cols):
-                label = f"{year}_{col}" if not (compare_with is None) else col
+                label = f"{key}_{col}" if not (compare_with is None) else col
+                ax.text(
+                    0.15,
+                    0.95 - (idx + idx1) * 0.05,
+                    f"max = {df[col].max():,} counters",
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    transform=ax.transAxes,
+                    color=colors[idx + idx1],
+                )
                 if idx == 0:
                     ax.step(df.index, df[col], label=label)
                     if compare_with is None:
@@ -586,6 +679,7 @@ class SimParam:
                             color=colors[idx],
                             alpha=0.2,
                         )
+            idx1 += 1
         if legend:
             plt.legend(
                 ncol=1 + (len(cols) // 6),
