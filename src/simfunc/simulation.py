@@ -360,7 +360,7 @@ class Simulation:
 
         return self
 
-    def plot_result(self):
+    def plot_result(self, same_scale: bool = False):
         n_graph = len([*self.dct_plot])
         # we force n_graph>=2 for 2-dim axs (for indexing)
         dummy_graph = False
@@ -488,6 +488,18 @@ class Simulation:
         labels = axs[n_graph - 1, 0].get_xticklabels()
         plt.setp(labels, rotation=45, horizontalalignment="right")
         axs[n_graph - 1, 0].set(xlabel="time")
+
+        if same_scale:
+            maxy0 = max([axs[i, 0].get_ylim()[1] for i in range(n_graph)])
+            maxy1 = max([axs[i, 1].get_ylim()[1] for i in range(n_graph)])
+            maxy2 = max([ax2[i].get_ylim()[1] for i in range(n_graph)])
+            maxx1 = max([axs[i, 1].get_xlim()[1] for i in range(n_graph)])
+
+            for i in range(n_graph):
+                axs[i, 0].set_ylim(top=maxy0)
+                axs[i, 1].set_ylim(top=maxy1)
+                ax2[i].set_ylim(top=maxy2)
+                axs[i, 1].set_xlim(right=maxx1)
 
         # remove dummy if needed
         if dummy_graph:
