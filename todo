@@ -2,3 +2,6 @@
 - simparam graph, legend and fill_between as option in func args
 
 - remove hard coding of list_process_all from Simulation
+- review plot functions code for concision
+
+- graph for 'wait for opening'
