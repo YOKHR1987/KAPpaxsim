@@ -482,6 +482,7 @@ class SimParam:
         by_col: bool = False,
         col_name: str = None,
         compare_with: Union["SimParam", list] = None,
+        reverse_cat: bool = False,  # to reverse order of categories
         freq: str = "1H",
         win=1,
     ):
@@ -564,7 +565,7 @@ class SimParam:
             x = date_range + (2 * index + 1) * interval
             if by_col:
                 previous_plot = dct_plot[categories[0]] * 0
-                for category in categories:
+                for category in reversed(categories) if reverse_cat else categories:
                     label_cat = (
                         f"{category} std {label}"
                         if not (compare_with is None)
