@@ -218,7 +218,7 @@ class Simulation:
         ratio_sampling = pd.to_timedelta("1H") / pd.to_timedelta(freq)
 
         # list for iteration
-        list_process_all = ["kiosk", "checkin", "CUSBD"]
+        list_process_all = list(self.simparam.dct_processes.keys())
 
         # different types of columns
         datetime_columns_types = [
@@ -523,7 +523,9 @@ class Simulation:
                 axs[i, 0].set_ylim(top=maxy0)
                 axs[i, 1].set_ylim(top=maxy1)
                 ax2[i].set_ylim(top=maxy2)
-                axs[i, 1].set_xlim(right=maxx1)
+                axs[i, 1].set_xlim(
+                    right=min(200, maxx1),
+                )  # 200 min max wait time for x axis
 
         # remove dummy if needed
         if dummy_graph:
