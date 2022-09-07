@@ -1,6 +1,7 @@
 # simulation.py
 
 import datetime
+from typing import Union
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -217,7 +218,7 @@ class Simulation:
         ratio_sampling = pd.to_timedelta("1H") / pd.to_timedelta(freq)
 
         # list for iteration
-        list_process_all = ["kiosk", "checkin", "CUSBD"]
+        list_process_all = list(self.simparam.dct_processes.keys())
 
         # different types of columns
         datetime_columns_types = [
@@ -360,7 +361,25 @@ class Simulation:
 
         return self
 
-    def plot_result(self, same_scale: bool = False):
+    def plot_result(
+        self,
+        uniform_scale: bool = False,
+        same_scale_as: Union["Simulation", list] = None,
+        plot: bool = True,
+    ):
+        # make a list of all Simulation for same scale
+        if not (same_scale_as is None):
+            if type(same_scale_as) != list:
+                same_scale_as = [same_scale_as]
+            # make sure all same_scale_as are have scale
+            for simulation in same_scale_as:
+                if not hasattr(simulation, "maxy0"):
+                    simulation.plot_result(plot=False)
+        else:
+            same_scale_as = []
+
+        same_scale_as.insert(0, self)
+
         n_graph = len([*self.dct_plot])
         # we force n_graph>=2 for 2-dim axs (for indexing)
         dummy_graph = False
@@ -489,17 +508,24 @@ class Simulation:
         plt.setp(labels, rotation=45, horizontalalignment="right")
         axs[n_graph - 1, 0].set(xlabel="time")
 
-        if same_scale:
-            maxy0 = max([axs[i, 0].get_ylim()[1] for i in range(n_graph)])
-            maxy1 = max([axs[i, 1].get_ylim()[1] for i in range(n_graph)])
-            maxy2 = max([ax2[i].get_ylim()[1] for i in range(n_graph)])
-            maxx1 = max([axs[i, 1].get_xlim()[1] for i in range(n_graph)])
+        self.maxy0 = max([axs[i, 0].get_ylim()[1] for i in range(n_graph)])
+        self.maxy1 = max([axs[i, 1].get_ylim()[1] for i in range(n_graph)])
+        self.maxy2 = max([ax2[i].get_ylim()[1] for i in range(n_graph)])
+        self.maxx1 = max([axs[i, 1].get_xlim()[1] for i in range(n_graph)])
 
+        maxy0 = max([simulation.maxy0 for simulation in same_scale_as])
+        maxy1 = max([simulation.maxy1 for simulation in same_scale_as])
+        maxy2 = max([simulation.maxy2 for simulation in same_scale_as])
+        maxx1 = max([simulation.maxx1 for simulation in same_scale_as])
+
+        if uniform_scale or same_scale_as != [self]:
             for i in range(n_graph):
                 axs[i, 0].set_ylim(top=maxy0)
                 axs[i, 1].set_ylim(top=maxy1)
                 ax2[i].set_ylim(top=maxy2)
-                axs[i, 1].set_xlim(right=maxx1)
+                axs[i, 1].set_xlim(
+                    right=min(200, maxx1),
+                )  # 200 min max wait time for x axis
 
         # remove dummy if needed
         if dummy_graph:
@@ -507,4 +533,7 @@ class Simulation:
             axs[1, 1].remove()
             ax2[1].remove()
 
-        plt.show()
+        if plot:
+            plt.show()
+        else:
+            plt.close()
